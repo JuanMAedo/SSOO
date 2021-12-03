@@ -29,7 +29,7 @@ int main(void){
     int fallo_comand_novalido = 0;
 
     //Ignorar las señales
-	signal(SIGINT, SIG_IGN);
+    signal(SIGINT, SIG_IGN);
 	signal (SIGQUIT, SIG_IGN);
 
     //Imprimir desde el directorio en el que ejecutamos la Minishell
@@ -40,23 +40,19 @@ int main(void){
 	while (fgets(buffer, 1024, stdin)) {
 
         linea_leida = tokenize(buffer);
+
         if (linea_leida == NULL) {
 			continue;
-		}
-     
-		if (linea_leida->redirect_input != NULL) {
+		}if (linea_leida->redirect_input != NULL) {
 			printf("redirección de entrada: %s\n", linea_leida->redirect_input);
             redireccion_entrada(linea_leida);
-		}
-		if (linea_leida->redirect_output != NULL) {
+		}if (linea_leida->redirect_output != NULL) {
             redireccion_salida(linea_leida);
 			printf("redirección de salida: %s\n", linea_leida->redirect_output);  
-		}
-		if (linea_leida->redirect_error != NULL) {
+		}if (linea_leida->redirect_error != NULL) {
 			printf("redirección de error: %s\n", linea_leida->redirect_error);
             redireccion_error(linea_leida);
-		}
-        if (linea_leida->ncommands >=1){
+		} if (linea_leida->ncommands >=1){
             //Comprobación de mandatos internos de la Bash que se piden desarrollar
             if(strcmp(linea_leida->commands[0].argv[0],"cd") == 0){
                 comando_cd(linea_leida);  
@@ -72,8 +68,7 @@ int main(void){
                     if(linea_leida->commands[i].filename == NULL){
                         fallo_comand_novalido = 1;    
                     }
-                }
-                if (fallo_comand_novalido != 1){
+                }if (fallo_comand_novalido != 1){
                     redireccion_comando(linea_leida);
                 }else{
                     fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
@@ -84,10 +79,8 @@ int main(void){
         //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
 		printf("%s/msh> ",buffer_cwd);	
-
     }
     return 0;
-
 }
 
 void redireccion_entrada(tline *linea){
@@ -125,8 +118,7 @@ void redireccion_salida(tline * linea){
             // Cerramos el descriptor
             close(fdescriptor);
         }
-    }
-    
+    }   
 }
 
 void redireccion_error(tline * linea){
