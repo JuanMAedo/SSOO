@@ -1,5 +1,5 @@
 # SSOO
-OS projects of University 
+Projects of the OS of the 3º year of the University 
 
 # Project 1 : Minishell #
 Here, we have to develop a proyect in C with the objetive of simulate a shell. 
