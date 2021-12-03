@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/queue.h>
 #include <sys/types.h>
 
 
@@ -28,12 +27,16 @@ int main(void){
     tline * linea_leida;
     int i;
     int fallo_comand_novalido = 0;
+
     //Ignorar las señales
 	signal(SIGINT, SIG_IGN);
 	signal (SIGQUIT, SIG_IGN);
 
+    //Imprimir desde el directorio en el que ejecutamos la Minishell
     getcwd(buffer_cwd,1024);
     printf("%s/msh> ",buffer_cwd);	
+
+    //Bucle a la escucha de lo que le entra
 	while (fgets(buffer, 1024, stdin)) {
 
         linea_leida = tokenize(buffer);
@@ -78,6 +81,7 @@ int main(void){
                 fallo_comand_novalido = 0;
             }
         }
+        //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
 		printf("%s/msh> ",buffer_cwd);	
 
