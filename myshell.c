@@ -162,15 +162,7 @@ void comando_cd(tline * linea){
 }
 
 void comando_fg(tline * linea){
-    pid_t pid_aux;
-    pid_aux = linea->commands[0].argv[1];
-    if (pid_aux == 0){
-        //Hacer fg sobre el último mandato en bg
-    }else if (//recorrer lista y si coincide con pid_aux){
-        
-    }else{ // El recorrido nos indica que no corresponde el pid a ningún proceso en bg existente
-        printf(stderr, "Error al ejecutar '%s %s' : %s\n" , linea->commands[0].argv[0],linea->commands[0].argv[1], strerror(errno));
-    }
+
 }
 
 void comando_jobs(tline * linea){}
