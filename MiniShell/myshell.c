@@ -19,6 +19,10 @@ void comando_cd(tline *linea);
 void comando_jobs(tline *linea);
 void comando_fg(tline *linea);
 
+// Variables generales
+tline ** comandos_bg; // Establecemos un máx de 20 comandos ejecutandose en background simultáneamente
+
+
 int main(void){
     
     // Declarar variables 
@@ -141,10 +145,27 @@ void redireccion_error(tline * linea){
 }
 
 void redireccion_background(tline * linea){
-
+    signal(SIGINT, SIG_DFL);
+	signal (SIGQUIT, SIG_DFL);
 }
 
 void redireccion_comando(tline *linea){
+    pid_t pid[linea->ncommands];
+    int i;
+    if(linea->background = 1){
+        comandos_bg = linea;
+    }
+    for(i=0; i < linea->ncommands;i++){
+        pid[i] = fork();
+        if (pid[i] == 0)
+        {
+            pause();
+        }
+        else if(linea->background = 1){
+            redireccion_background(linea);
+        } 
+    }
+
 
     printf("Comando válido\n");
     if (linea->background) {
