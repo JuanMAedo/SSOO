@@ -20,7 +20,7 @@ void comando_jobs(tline *linea);
 void comando_fg(tline *linea);
 
 // Variables generales
-tline ** comandos_bg; // Establecemos un máx de 20 comandos ejecutandose en background simultáneamente
+tline ** comandos_bg; 
 
 
 int main(void){
@@ -36,6 +36,7 @@ int main(void){
     signal(SIGINT, SIG_IGN);
 	signal (SIGQUIT, SIG_IGN);
 
+    //Guardar valores originales de las Entradas y Salidas estándar
     int red_entrada = dup(fileno(stdin));
     int red_salida = dup(fileno(stdout));
     int red_error = dup(fileno(stderr));
@@ -52,13 +53,13 @@ int main(void){
         if (linea_leida == NULL) {
 			continue;
 		}if (linea_leida->redirect_input != NULL) {
-			printf("redirección de entrada: %s\n", linea_leida->redirect_input);
+			printf("Redirección de entrada: %s\n", linea_leida->redirect_input);
             redireccion_entrada(linea_leida);
 		}if (linea_leida->redirect_output != NULL) {
-            redireccion_salida(linea_leida);
-			printf("redirección de salida: %s\n", linea_leida->redirect_output);  
+			printf("Redirección de salida: %s\n", linea_leida->redirect_output); 
+            redireccion_salida(linea_leida); 
 		}if (linea_leida->redirect_error != NULL) {
-			printf("redirección de error: %s\n", linea_leida->redirect_error);
+			printf("Redirección de error: %s\n", linea_leida->redirect_error);
             redireccion_error(linea_leida);
 		} if (linea_leida->ncommands >=1){
             //Comprobación de mandatos internos de la Bash que se piden desarrollar
@@ -89,12 +90,11 @@ int main(void){
 			dup2(red_entrada ,0);	
 		}
 		if(linea_leida->redirect_output != NULL ){
-			dup2(red_salida , 1);	
+			dup2(red_salida ,1);	
 		}
 		if(linea_leida->redirect_error != NULL ){
-			dup2(red_error , 2);	
+			dup2(red_error ,2);	
 		}
-
         //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
 		printf("%s/msh> ",buffer_cwd);	
@@ -165,12 +165,33 @@ void redireccion_background(tline * linea){
 }
 
 void redireccion_comando(tline *linea){
-    /*pid_t pid[linea->ncommands];
-    int i;
-    if(linea->background = 1){
-        comandos_bg = linea;
+    pid_t pid[linea->ncommands];
+    int i,status;
+    if(linea->ncommands == 1){ // En caso de no usar Pipes simplificamos el modo de realizarse
+        pid[0] = fork();
+        if (pid < 0){
+            fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+			exit(1);
+        }else if(pid[0] == 0){ // Corresponde al codigo del hijo
+            //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
+            if(linea->background){redireccion_background(linea);}
+            else{
+                signal(SIGINT, SIG_DFL);
+	            signal(SIGQUIT, SIG_DFL);
+            }
+            execvp(linea->commands[0].filename, linea->commands->argv);
+            fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+        }else{ 	
+            wait (&status);
+            if (WIFEXITED(status) != 0){
+                if (WEXITSTATUS(status) != 0){
+                    printf("El comando no se ejecutó correctamente\n");
+                }   
+            } 
+        }
     }
-    for(i=0; i < linea->ncommands;i++){
+
+    /*for(i=0; i < linea->ncommands;i++){
         pid[i] = fork();
         if (pid[i] == 0)
         {
