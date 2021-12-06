@@ -36,6 +36,10 @@ int main(void){
     signal(SIGINT, SIG_IGN);
 	signal (SIGQUIT, SIG_IGN);
 
+    int red_entrada = dup(fileno(stdin));
+    int red_salida = dup(fileno(stdout));
+    int red_error = dup(fileno(stderr));
+
     //Imprimir desde el directorio en el que ejecutamos la Minishell
     getcwd(buffer_cwd,1024);
     printf("%s/msh> ",buffer_cwd);	
@@ -80,6 +84,17 @@ int main(void){
                 fallo_comand_novalido = 0;
             }
         }
+        // Restablecer los descriptores por si han sido modificados 		
+		if(linea_leida->redirect_input != NULL ){
+			dup2(red_entrada ,0);	
+		}
+		if(linea_leida->redirect_output != NULL ){
+			dup2(red_salida , 1);	
+		}
+		if(linea_leida->redirect_error != NULL ){
+			dup2(red_error , 2);	
+		}
+
         //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
 		printf("%s/msh> ",buffer_cwd);	
@@ -146,11 +161,11 @@ void redireccion_error(tline * linea){
 
 void redireccion_background(tline * linea){
     signal(SIGINT, SIG_DFL);
-	signal (SIGQUIT, SIG_DFL);
+	signal(SIGQUIT, SIG_DFL);
 }
 
 void redireccion_comando(tline *linea){
-    pid_t pid[linea->ncommands];
+    /*pid_t pid[linea->ncommands];
     int i;
     if(linea->background = 1){
         comandos_bg = linea;
@@ -165,12 +180,10 @@ void redireccion_comando(tline *linea){
             redireccion_background(linea);
         } 
     }
-
-
     printf("Comando válido\n");
     if (linea->background) {
         printf("Ejecuta en background\n");
-    }
+    }*/
 }
 
 void comando_cd(tline * linea){
