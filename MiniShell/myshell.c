@@ -13,7 +13,7 @@
 void redireccion_entrada(tline *linea);
 void redireccion_salida(tline *linea);
 void redireccion_error(tline *linea);
-void redireccion_background(tline *linea);
+void redireccion_bg(tline *linea);
 void redireccion_1comando(tline *linea);
 void comando_cd(tline *linea);
 void comando_jobs(tline *linea);
@@ -79,16 +79,17 @@ int main(void){
                         fallo_comand_novalido = 1;    
                     }
                 }
-                if (fallo_comand_novalido != 1){
-                    if (linea_leida->ncommands == 1){
-                        redireccion_1comando(linea_leida);
-                    }else{
-                        redireccion_varios_comandos(linea_leida);    
-                    }
+            if (fallo_comand_novalido != 1){
+                if (linea_leida->ncommands == 1){
+                    redireccion_1comando(linea_leida);
                 }else{
-                    fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
+                    redireccion_varios_comandos(linea_leida);
+                    printf("Salida varios_comandos\n");    
                 }
-                fallo_comand_novalido = 0;
+            }else{
+                fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
+            }
+            fallo_comand_novalido = 0;
             }
         }
         // Restablecer los descriptores por si han sido modificados 		
@@ -165,7 +166,7 @@ void redireccion_error(tline * linea){
     }    
 }
 
-void redireccion_senyales(tline * linea){
+void redireccion_bg(tline * linea){
     if(linea->background == 1){
         signal(SIGINT, SIG_IGN);
         signal(SIGQUIT, SIG_IGN);
@@ -184,7 +185,7 @@ void redireccion_1comando(tline *linea){
         exit(1);
     }else if(pid == 0){ // Corresponde al codigo del hijo
         //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
-        redireccion_senyales(linea);
+        redireccion_bg(linea);
         execvp(linea->commands[0].filename, linea->commands->argv);
          // Si ejecuta esta parte del código, implica fallo en el execvp
         fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
@@ -195,75 +196,61 @@ void redireccion_1comando(tline *linea){
 } 
 
 void redireccion_varios_comandos(tline *linea){
-    pid_t pid,pid_last;
-    int pipes[1][2];
-    int status;
-    // 2 mandatos pipes[1]
-    //Padre --> Pipe -->1mandato --> pipe -->npipes[i-1] (npipes[i])(2mandatos) --> Pipe --> Padre
-    pipe(pipes[0]);
-    pid = fork();
-    if (pid < 0){
-        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
-        exit(1);
+    pid_t pid,all_pids[linea->ncommands];
+    int i,pipes[linea->ncommands -1][2];
+    for(int i=0; i < linea->ncommands-1; i++){
+        if(pipe(pipes[i]) < 0){
+            fprintf(stderr, "Falló crear el pipe %s/n" , strerror(errno));
+        }    
     }
-    // 1 er hijo
-    if (pid == 0){ 
-        redireccion_senyales(linea);
-        //Cerramos el descriptor de lectura que no se usa
-        close(pipes[0][0]);
-        // Apuntamos la escritura en el 1º pipe
-        dup2(pipes[0][1],1);
-        execvp(linea->commands[0].filename, linea->commands->argv);
-        // Si ejecuta esta parte del código, implica fallo en el execvp
-        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
-        exit(1);
-    }//Si hay hijos intermedios
-   /*if (linea->ncommands > 2){
-        
-        for(int i = 1; i<(linea->ncommands-1); i++){
-            pipe(pipes[i]);
-            pid = fork();
-            if (pid < 0){
-            fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+    for(int i =0; i < linea->ncommands; i++){
+        pid = fork();
+        if(pid < 0){
+            fprintf(stderr, "Falló el fork() %s\n" , strerror(errno));
             exit(1);
-            }
-            else if (pid == 0){ 
-                redireccion_senyales(linea);
+        } else if(pid == 0){
+            if(i == 0){
+                for(int j=1; j<linea->ncommands-1; j++){ 
+					close(pipes[j][1]);
+					close(pipes[j][0]);
+				}
+                close(pipes[0][0]);
+                dup2(pipes[0][1],1);
+            }else if(i > 0 && i < (linea->ncommands -1)){
+                for(int j=0; j < i-1; j++){
+                    close(pipes[j][0]);
+                    close(pipes[j][1]);
+                }
+                for(int j=i+1;j< (linea->ncommands -1);j++){
+                    close(pipes[j][0]);
+                    close(pipes[j][1]);
+                }
                 close(pipes[i-1][1]);
                 close(pipes[i][0]);
+				dup2(pipes[i-1][0],0);
+				dup2(pipes[i][1],1);   
+            }else if((linea->ncommands-1)== i){
+                for(int j=0; j<linea->ncommands-2; j++){ 
+                close(pipes[j][1]);
+                close(pipes[j][0]);
+                }
+                close(pipes[i-1][1]);
                 dup2(pipes[i-1][0],0);
-                dup2(pipes[i][1],1);
-                execvp(linea->commands[i].filename, linea->commands->argv);
-                fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
-                exit(1);
-            }    
+            } 
+            execvp(linea->commands[i].filename, linea->commands[i].argv); 
+		    fprintf(stderr,"%s: Error al ejecutar el mandato en el proceso hijo\n",linea->commands[i].filename);
+            exit(1);
         }
-    }*/
-    //Ultimo hijo
-    else{
-    printf("Creando 2 hijo\n");
-    pid_last = fork();
-    
-    if (pid < 0){
-        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
-        exit(1);
-    }else if (pid == 0){
-        redireccion_senyales(linea);
-        //Cerramos la escritura del ultimo pipe
-        close(pipes[0][1]);
-        dup2(pipes[0][0],0);
-        execvp(linea->commands[linea->ncommands-1].filename, linea->commands->argv);
-        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
-        exit(1);
-    }  
-    for (int i=0; (i<linea->ncommands-1);i++){
-        close(pipes[i][0]);
-        close(pipes[i][1]);
-        printf("Cerrando pipe[%d]\n",i);
-    }
-		wait(&status);
-    }
+		}
+        for(i = 0; i <linea->ncommands-1; i++){ //Cerramos todos los pipes
+            close(pipes[i][1]);
+            close(pipes[i][0]);
+		}
+        for(i=0; i < linea->ncommands; i++){ 
+            waitpid(all_pids[i],NULL,0);
+        }
 }
+
 
 
 void comando_cd(tline * linea){
