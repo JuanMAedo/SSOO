@@ -14,10 +14,11 @@ void redireccion_entrada(tline *linea);
 void redireccion_salida(tline *linea);
 void redireccion_error(tline *linea);
 void redireccion_background(tline *linea);
-void redireccion_comando(tline *linea);
+void redireccion_1comando(tline *linea);
 void comando_cd(tline *linea);
 void comando_jobs(tline *linea);
 void comando_fg(tline *linea);
+void redireccion_varios_comandos( tline * linea);
 
 // Variables generales
 tline ** comandos_bg; 
@@ -77,8 +78,13 @@ int main(void){
                     if(linea_leida->commands[i].filename == NULL){
                         fallo_comand_novalido = 1;    
                     }
-                }if (fallo_comand_novalido != 1){
-                    redireccion_comando(linea_leida);
+                }
+                if (fallo_comand_novalido != 1){
+                    if (linea_leida->ncommands == 1){
+                        redireccion_1comando(linea_leida);
+                    }else{
+                        redireccion_varios_comandos(linea_leida);    
+                    }
                 }else{
                     fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
                 }
@@ -159,53 +165,106 @@ void redireccion_error(tline * linea){
     }    
 }
 
-void redireccion_background(tline * linea){
-    signal(SIGINT, SIG_DFL);
-	signal(SIGQUIT, SIG_DFL);
+void redireccion_senyales(tline * linea){
+    if(linea->background == 1){
+        signal(SIGINT, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);
+    }else{
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT,SIG_DFL);    
+    }
 }
 
-void redireccion_comando(tline *linea){
-    pid_t pid[linea->ncommands];
+void redireccion_1comando(tline *linea){
+    pid_t pid;
     int i,status;
-    if(linea->ncommands == 1){ // En caso de no usar Pipes simplificamos el modo de realizarse
-        pid[0] = fork();
-        if (pid < 0){
-            fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
-			exit(1);
-        }else if(pid[0] == 0){ // Corresponde al codigo del hijo
-            //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
-            if(linea->background){redireccion_background(linea);}
-            else{
-                signal(SIGINT, SIG_DFL);
-	            signal(SIGQUIT, SIG_DFL);
-            }
-            execvp(linea->commands[0].filename, linea->commands->argv);
-            fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
-        }else{ 	
-            wait (&status);
-            if (WIFEXITED(status) != 0){
-                if (WEXITSTATUS(status) != 0){
-                    printf("El comando no se ejecutó correctamente\n");
-                }   
-            } 
-        }
+    pid = fork();
+    if (pid < 0){
+        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+        exit(1);
+    }else if(pid == 0){ // Corresponde al codigo del hijo
+        //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
+        redireccion_senyales(linea);
+        execvp(linea->commands[0].filename, linea->commands->argv);
+         // Si ejecuta esta parte del código, implica fallo en el execvp
+        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+        exit(1);
+    }else{ 	
+        wait(&status);
     }
+} 
 
-    /*for(i=0; i < linea->ncommands;i++){
-        pid[i] = fork();
-        if (pid[i] == 0)
-        {
-            pause();
-        }
-        else if(linea->background = 1){
-            redireccion_background(linea);
-        } 
+void redireccion_varios_comandos(tline *linea){
+    pid_t pid,pid_last;
+    int pipes[1][2];
+    int status;
+    // 2 mandatos pipes[1]
+    //Padre --> Pipe -->1mandato --> pipe -->npipes[i-1] (npipes[i])(2mandatos) --> Pipe --> Padre
+    pipe(pipes[0]);
+    pid = fork();
+    if (pid < 0){
+        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+        exit(1);
     }
-    printf("Comando válido\n");
-    if (linea->background) {
-        printf("Ejecuta en background\n");
+    // 1 er hijo
+    if (pid == 0){ 
+        redireccion_senyales(linea);
+        //Cerramos el descriptor de lectura que no se usa
+        close(pipes[0][0]);
+        // Apuntamos la escritura en el 1º pipe
+        dup2(pipes[0][1],1);
+        execvp(linea->commands[0].filename, linea->commands->argv);
+        // Si ejecuta esta parte del código, implica fallo en el execvp
+        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+        exit(1);
+    }//Si hay hijos intermedios
+   /*if (linea->ncommands > 2){
+        
+        for(int i = 1; i<(linea->ncommands-1); i++){
+            pipe(pipes[i]);
+            pid = fork();
+            if (pid < 0){
+            fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+            exit(1);
+            }
+            else if (pid == 0){ 
+                redireccion_senyales(linea);
+                close(pipes[i-1][1]);
+                close(pipes[i][0]);
+                dup2(pipes[i-1][0],0);
+                dup2(pipes[i][1],1);
+                execvp(linea->commands[i].filename, linea->commands->argv);
+                fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+                exit(1);
+            }    
+        }
     }*/
+    //Ultimo hijo
+    else{
+    printf("Creando 2 hijo\n");
+    pid_last = fork();
+    
+    if (pid < 0){
+        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+        exit(1);
+    }else if (pid == 0){
+        redireccion_senyales(linea);
+        //Cerramos la escritura del ultimo pipe
+        close(pipes[0][1]);
+        dup2(pipes[0][0],0);
+        execvp(linea->commands[linea->ncommands-1].filename, linea->commands->argv);
+        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+        exit(1);
+    }  
+    for (int i=0; (i<linea->ncommands-1);i++){
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+        printf("Cerrando pipe[%d]\n",i);
+    }
+		wait(&status);
+    }
 }
+
 
 void comando_cd(tline * linea){
     //En caso de no pasar argumentos, cd se posiciona en $HOME
