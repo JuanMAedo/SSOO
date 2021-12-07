@@ -13,14 +13,15 @@
 void redireccion_entrada(tline *linea);
 void redireccion_salida(tline *linea);
 void redireccion_error(tline *linea);
-void redireccion_background(tline *linea);
-void redireccion_comando(tline *linea);
+void redireccion_bg(tline *linea);
+void redireccion_1comando(tline *linea);
 void comando_cd(tline *linea);
 void comando_jobs(tline *linea);
 void comando_fg(tline *linea);
+void redireccion_varios_comandos( tline * linea);
 
 // Variables generales
-tline ** comandos_bg; // Establecemos un máx de 20 comandos ejecutandose en background simultáneamente
+tline ** comandos_bg; 
 
 
 int main(void){
@@ -36,6 +37,11 @@ int main(void){
     signal(SIGINT, SIG_IGN);
 	signal (SIGQUIT, SIG_IGN);
 
+    //Guardar valores originales de las Entradas y Salidas estándar
+    int red_entrada = dup(fileno(stdin));
+    int red_salida = dup(fileno(stdout));
+    int red_error = dup(fileno(stderr));
+
     //Imprimir desde el directorio en el que ejecutamos la Minishell
     getcwd(buffer_cwd,1024);
     printf("%s/msh> ",buffer_cwd);	
@@ -48,13 +54,13 @@ int main(void){
         if (linea_leida == NULL) {
 			continue;
 		}if (linea_leida->redirect_input != NULL) {
-			printf("redirección de entrada: %s\n", linea_leida->redirect_input);
+			printf("Redirección de entrada: %s\n", linea_leida->redirect_input);
             redireccion_entrada(linea_leida);
 		}if (linea_leida->redirect_output != NULL) {
-            redireccion_salida(linea_leida);
-			printf("redirección de salida: %s\n", linea_leida->redirect_output);  
+			printf("Redirección de salida: %s\n", linea_leida->redirect_output); 
+            redireccion_salida(linea_leida); 
 		}if (linea_leida->redirect_error != NULL) {
-			printf("redirección de error: %s\n", linea_leida->redirect_error);
+			printf("Redirección de error: %s\n", linea_leida->redirect_error);
             redireccion_error(linea_leida);
 		} if (linea_leida->ncommands >=1){
             //Comprobación de mandatos internos de la Bash que se piden desarrollar
@@ -72,14 +78,30 @@ int main(void){
                     if(linea_leida->commands[i].filename == NULL){
                         fallo_comand_novalido = 1;    
                     }
-                }if (fallo_comand_novalido != 1){
-                    redireccion_comando(linea_leida);
-                }else{
-                    fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
                 }
-                fallo_comand_novalido = 0;
+            if (fallo_comand_novalido != 1){
+                if (linea_leida->ncommands == 1){
+                    redireccion_1comando(linea_leida);
+                }else{
+                    redireccion_varios_comandos(linea_leida);
+                    printf("Salida varios_comandos\n");    
+                }
+            }else{
+                fprintf(stderr, "Error, algún comando introducido es erróneo; %s.\n", strerror(errno));
+            }
+            fallo_comand_novalido = 0;
             }
         }
+        // Restablecer los descriptores por si han sido modificados 		
+		if(linea_leida->redirect_input != NULL ){
+			dup2(red_entrada ,0);	
+		}
+		if(linea_leida->redirect_output != NULL ){
+			dup2(red_salida ,1);	
+		}
+		if(linea_leida->redirect_error != NULL ){
+			dup2(red_error ,2);	
+		}
         //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
 		printf("%s/msh> ",buffer_cwd);	
@@ -144,34 +166,92 @@ void redireccion_error(tline * linea){
     }    
 }
 
-void redireccion_background(tline * linea){
-    signal(SIGINT, SIG_DFL);
-	signal (SIGQUIT, SIG_DFL);
+void redireccion_bg(tline * linea){
+    if(linea->background == 1){
+        signal(SIGINT, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);
+    }else{
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT,SIG_DFL);    
+    }
 }
 
-void redireccion_comando(tline *linea){
-    pid_t pid[linea->ncommands];
-    int i;
-    if(linea->background = 1){
-        comandos_bg = linea;
+void redireccion_1comando(tline *linea){
+    pid_t pid;
+    int i,status;
+    pid = fork();
+    if (pid < 0){
+        fprintf(stderr, "Falló el fork() : %s\n", strerror(errno));
+        exit(1);
+    }else if(pid == 0){ // Corresponde al codigo del hijo
+        //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
+        redireccion_bg(linea);
+        execvp(linea->commands[0].filename, linea->commands->argv);
+         // Si ejecuta esta parte del código, implica fallo en el execvp
+        fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
+        exit(1);
+    }else{ 	
+        wait(&status);
     }
-    for(i=0; i < linea->ncommands;i++){
-        pid[i] = fork();
-        if (pid[i] == 0)
-        {
-            pause();
+} 
+
+void redireccion_varios_comandos(tline *linea){
+    pid_t pid,all_pids[linea->ncommands];
+    int i,pipes[linea->ncommands -1][2];
+    for(int i=0; i < linea->ncommands-1; i++){
+        if(pipe(pipes[i]) < 0){
+            fprintf(stderr, "Falló crear el pipe %s/n" , strerror(errno));
+        }    
+    }
+    for(int i =0; i < linea->ncommands; i++){
+        pid = fork();
+        if(pid < 0){
+            fprintf(stderr, "Falló el fork() %s\n" , strerror(errno));
+            exit(1);
+        } else if(pid == 0){
+            if(i == 0){
+                for(int j=1; j<linea->ncommands-1; j++){ 
+					close(pipes[j][1]);
+					close(pipes[j][0]);
+				}
+                close(pipes[0][0]);
+                dup2(pipes[0][1],1);
+            }else if(i > 0 && i < (linea->ncommands -1)){
+                for(int j=0; j < i-1; j++){
+                    close(pipes[j][0]);
+                    close(pipes[j][1]);
+                }
+                for(int j=i+1;j< (linea->ncommands -1);j++){
+                    close(pipes[j][0]);
+                    close(pipes[j][1]);
+                }
+                close(pipes[i-1][1]);
+                close(pipes[i][0]);
+				dup2(pipes[i-1][0],0);
+				dup2(pipes[i][1],1);   
+            }else if((linea->ncommands-1)== i){
+                for(int j=0; j<linea->ncommands-2; j++){ 
+                close(pipes[j][1]);
+                close(pipes[j][0]);
+                }
+                close(pipes[i-1][1]);
+                dup2(pipes[i-1][0],0);
+            } 
+            execvp(linea->commands[i].filename, linea->commands[i].argv); 
+		    fprintf(stderr,"%s: Error al ejecutar el mandato en el proceso hijo\n",linea->commands[i].filename);
+            exit(1);
         }
-        else if(linea->background = 1){
-            redireccion_background(linea);
-        } 
-    }
-
-
-    printf("Comando válido\n");
-    if (linea->background) {
-        printf("Ejecuta en background\n");
-    }
+		}
+        for(i = 0; i <linea->ncommands-1; i++){ //Cerramos todos los pipes
+            close(pipes[i][1]);
+            close(pipes[i][0]);
+		}
+        for(i=0; i < linea->ncommands; i++){ 
+            waitpid(all_pids[i],NULL,0);
+        }
 }
+
+
 
 void comando_cd(tline * linea){
     //En caso de no pasar argumentos, cd se posiciona en $HOME
