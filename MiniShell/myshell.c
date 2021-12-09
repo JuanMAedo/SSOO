@@ -66,7 +66,6 @@ int main(void){
                 }if (fallo_comand_novalido != 1){
                     if (linea_leida->ncommands == 1){
                         redireccion_1comando(linea_leida);
-                        printf("VUelta al main\n");
                     }else{
                         redireccion_varios_comandos(linea_leida);  
                     }
@@ -167,47 +166,54 @@ void redireccion_1comando(tline *linea){
 }
  
 void redireccion_varios_comandos(tline *linea){
-    pid_t pid,all_pids[linea->ncommands];
-    int i,pipes[linea->ncommands -1][2];
-    for(int i=0; i < linea->ncommands-1; i++){
+    pid_t all_pids[linea->ncommands];
+    int i,pipes[linea->ncommands - 1][2];
+    for( i = 0; i < linea->ncommands - 1; i++){
         if(pipe(pipes[i]) < 0){
             fprintf(stderr, "Falló crear el pipe %s/n" , strerror(errno));
         }    
     }
-    for(int i =0; i < linea->ncommands; i++){
+    for( i = 0; i < linea->ncommands; i++){
         all_pids[i] = fork();
         if(all_pids[i] < 0){
             fprintf(stderr, "Falló el fork() %s\n" , strerror(errno));
             exit(1);
-        } else if(all_pids[i]== 0){
-            for(int j=0; j<(linea->ncommands -1); j++) {
-                if( ((j!=i && j!=(i-1))) || ((j!=i && j!=(i-1))) && (((linea->ncommands-1)== i) && (j < i))) {
+        } else if(all_pids[i] == 0){
+            //Si hay redirección, todo los procesos se ejecutan en bg
+            redireccion_bg(linea);
+            for(int j=0; j<(linea->ncommands - 1); j++) {
+                //Comprobamos en que hijo está, y por tanto, que pipes puede cerrar completamente
+                if( ((j != i && j != (i-1))) || ((j != i && j != (i - 1))) && (((linea->ncommands - 1) == i) && (j < i))) {
                     close(pipes[j][1]);
                     close(pipes[j][0]);
                 }
-            }   
+            }
+            //En caso de que hijo sea, cierra la I/O de las pipes que no interesa, y reescribe en el descriptor que use   
             if(i == 0){
                 close(pipes[0][0]);
                 dup2(pipes[0][1],1);
-            }else if(i > 0 && i < (linea->ncommands -1)){  
+            }else if(i > 0 && i < (linea->ncommands - 1)){  
                 close(pipes[i-1][1]);
                 close(pipes[i][0]);
 				dup2(pipes[i-1][0],0);
 				dup2(pipes[i][1],1);   
-            }else if((linea->ncommands-1)== i){
+            }else if((linea->ncommands - 1) == i){
                 close(pipes[i-1][1]);
                 dup2(pipes[i-1][0],0);   
-            } 
+            }
+            //Común a todos los procesos, la ejecución y, si lo hubiese, nos indica el fallo   
             execvp(linea->commands[i].filename, linea->commands[i].argv); 
 		    fprintf(stderr,"%s: Error al ejecutar el mandato en el proceso hijo\n",linea->commands[i].filename);
             exit(1);
         }
 	}
-    for(i = 0; i <linea->ncommands-1; i++){ //Cerramos todos los pipes
+    //Cerramos todos los pipes en el padre
+    for(i = 0; i <linea->ncommands - 1; i++){ 
         close(pipes[i][1]);
         close(pipes[i][0]);
     }
-    for(i=0; i < linea->ncommands; i++){ 
+    //Esperamos a que todos los hijos terminen
+    for(i = 0; i < linea->ncommands; i++){ 
         waitpid(all_pids[i],NULL,0);
     }
 }
