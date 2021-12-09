@@ -63,16 +63,14 @@ int main(void){
                     if(linea_leida->commands[i].filename == NULL){
                         fallo_comand_novalido = 1;    
                     }
-                }
-                if (fallo_comand_novalido != 1){
+                }if (fallo_comand_novalido != 1){
                     if (linea_leida->ncommands == 1){
                         redireccion_1comando(linea_leida);
+                        printf("VUelta al main\n");
                     }else{
                         redireccion_varios_comandos(linea_leida);  
                     }
-                }else{
-                    fprintf(stderr, "Error, algún comando introducido es erróneo: %s.\n", strerror(errno));
-                }
+                }else { fprintf(stderr, "Error, algún comando introducido es erróneo: %s.\n", strerror(errno)); }
             fallo_comand_novalido = 0;
             }
         }
@@ -164,56 +162,54 @@ void redireccion_1comando(tline *linea){
          // Si ejecuta esta parte del código, implica fallo en el execvp
         fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
         exit(1);
-    }else{ wait(&status);}
+    } 
+    wait(&status);
 }
  
 void redireccion_varios_comandos(tline *linea){
-    pid_t all_pids[linea->ncommands];
+    pid_t pid,all_pids[linea->ncommands];
     int i,pipes[linea->ncommands -1][2];
     for(int i=0; i < linea->ncommands-1; i++){
         if(pipe(pipes[i]) < 0){
-            fprintf(stderr, "Fall al crear el pipe %s/n" , strerror(errno));
+            fprintf(stderr, "Falló crear el pipe %s/n" , strerror(errno));
         }    
     }
     for(int i =0; i < linea->ncommands; i++){
         all_pids[i] = fork();
         if(all_pids[i] < 0){
-            fprintf(stderr, "Fallo al ejecutar el fork() %s\n" , strerror(errno));
+            fprintf(stderr, "Falló el fork() %s\n" , strerror(errno));
             exit(1);
-        } else if(all_pids[i] == 0){
-            redireccion_bg(linea);
+        } else if(all_pids[i]== 0){
             for(int j=0; j<(linea->ncommands -1); j++) {
-                if(j!=i && j!=(i-1)) {
+                if( ((j!=i && j!=(i-1))) || ((j!=i && j!=(i-1))) && (((linea->ncommands-1)== i) && (j < i))) {
                     close(pipes[j][1]);
                     close(pipes[j][0]);
                 }
-            }
+            }   
             if(i == 0){
                 close(pipes[0][0]);
                 dup2(pipes[0][1],1);
-            }else if(i > 0 && i < (linea->ncommands -1)){   
+            }else if(i > 0 && i < (linea->ncommands -1)){  
                 close(pipes[i-1][1]);
                 close(pipes[i][0]);
 				dup2(pipes[i-1][0],0);
 				dup2(pipes[i][1],1);   
             }else if((linea->ncommands-1)== i){
                 close(pipes[i-1][1]);
-                dup2(pipes[i-1][0],0);
+                dup2(pipes[i-1][0],0);   
             } 
             execvp(linea->commands[i].filename, linea->commands[i].argv); 
-            //Si ejecuta esta parte del código implica fallo en el execvp
 		    fprintf(stderr,"%s: Error al ejecutar el mandato en el proceso hijo\n",linea->commands[i].filename);
             exit(1);
         }
+	}
+    for(i = 0; i <linea->ncommands-1; i++){ //Cerramos todos los pipes
+        close(pipes[i][1]);
+        close(pipes[i][0]);
     }
-    // Esperamos a que terminen todos los hijos, y cerramos todos los pipes en el padre
     for(i=0; i < linea->ncommands; i++){ 
         waitpid(all_pids[i],NULL,0);
-    } 
-    for(i = 0; i <linea->ncommands-1; i++){ 
-        close(pipes[i][1]);
-        close(pipes[i][0]); 
-    } 
+    }
 }
 void comando_cd(tline * linea){
     //En caso de no pasar argumentos, cd se posiciona en $HOME
