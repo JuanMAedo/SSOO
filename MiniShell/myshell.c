@@ -26,7 +26,7 @@ int main(void){
     int fallo_comand_novalido = 0;
     //Ignorar las señales
     signal(SIGINT, SIG_IGN);
-	signal (SIGQUIT, SIG_IGN);
+    signal (SIGQUIT, SIG_IGN);
     //Guardar valores originales de las Entradas y Salidas estándar
     int red_entrada = dup(fileno(stdin));
     int red_salida = dup(fileno(stdout));
@@ -35,20 +35,20 @@ int main(void){
     getcwd(buffer_cwd,1024);
     printf("%s/msh> ",buffer_cwd);	
     //Bucle a la escucha de lo que le entra
-	while (fgets(buffer, 1024, stdin)) {
+    while (fgets(buffer, 1024, stdin)) {
         linea_leida = tokenize(buffer);
         if (linea_leida == NULL) {
-			continue;
-		}if (linea_leida->redirect_input != NULL) {
-			printf("Redirección de entrada: %s\n", linea_leida->redirect_input);
+		continue;
+	}if (linea_leida->redirect_input != NULL) {
+		printf("Redirección de entrada: %s\n", linea_leida->redirect_input);
             redireccion_entrada(linea_leida);
-		}if (linea_leida->redirect_output != NULL) {
-			printf("Redirección de salida: %s\n", linea_leida->redirect_output); 
-            redireccion_salida(linea_leida); 
-		}if (linea_leida->redirect_error != NULL) {
-			printf("Redirección de error: %s\n", linea_leida->redirect_error);
-            redireccion_error(linea_leida);
-		} if (linea_leida->ncommands >=1){
+	}if (linea_leida->redirect_output != NULL) {
+		printf("Redirección de salida: %s\n", linea_leida->redirect_output); 
+    		redireccion_salida(linea_leida); 
+	}if (linea_leida->redirect_error != NULL) {
+		printf("Redirección de error: %s\n", linea_leida->redirect_error);
+    		redireccion_error(linea_leida);
+	}if (linea_leida->ncommands >=1){
             //Comprobación de mandatos internos de la Bash que se piden desarrollar
             if(strcmp(linea_leida->commands[0].argv[0],"cd") == 0){
                 comando_cd(linea_leida);  
@@ -74,18 +74,18 @@ int main(void){
             }
         }
         // Restablecer los descriptores por si han sido modificados 		
-		if(linea_leida->redirect_input != NULL ){
-			dup2(red_entrada ,0);	
-		}
-		if(linea_leida->redirect_output != NULL ){
-			dup2(red_salida ,1);	
-		}
-		if(linea_leida->redirect_error != NULL ){
-			dup2(red_error ,2);	
-		}
+	if(linea_leida->redirect_input != NULL ){
+		dup2(red_entrada ,0);	
+	}
+	if(linea_leida->redirect_output != NULL ){
+		dup2(red_salida ,1);	
+	}
+	if(linea_leida->redirect_error != NULL ){
+		dup2(red_error ,2);	
+	}
         //Imprimir desde el directorio en el que ejecutamos la Minishell
         getcwd(buffer_cwd,1024);
-		printf("%s/msh> ",buffer_cwd);	
+	printf("%s/msh> ",buffer_cwd);	
     }
     return 0;
 }
@@ -193,8 +193,8 @@ void redireccion_varios_comandos(tline *linea){
             }else if(i > 0 && i < (linea->ncommands - 1)){  
                 close(pipes[i-1][1]);
                 close(pipes[i][0]);
-				dup2(pipes[i-1][0],0);
-				dup2(pipes[i][1],1);   
+		dup2(pipes[i-1][0],0);
+		dup2(pipes[i][1],1);   
             }else if((linea->ncommands - 1) == i){
                 close(pipes[i-1][1]);
                 dup2(pipes[i-1][0],0);   
@@ -204,7 +204,7 @@ void redireccion_varios_comandos(tline *linea){
 		    fprintf(stderr,"%s: Error al ejecutar el mandato en el proceso hijo\n",linea->commands[i].filename);
             exit(1);
         }
-	}
+    }
     //Cerramos todos los pipes en el padre
     for(i = 0; i <linea->ncommands - 1; i++){ 
         close(pipes[i][1]);
