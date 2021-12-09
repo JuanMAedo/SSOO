@@ -89,7 +89,6 @@ int main(void){
     }
     return 0;
 }
-
 void redireccion_entrada(tline *linea){
     // Comprobamos que exista la redirección
     if(linea->redirect_input != NULL){
@@ -163,8 +162,7 @@ void redireccion_1comando(tline *linea){
         exit(1);
     } 
     wait(&status);
-}
- 
+} 
 void redireccion_varios_comandos(tline *linea){
     pid_t all_pids[linea->ncommands];
     int i,pipes[linea->ncommands - 1][2];
@@ -179,7 +177,7 @@ void redireccion_varios_comandos(tline *linea){
             fprintf(stderr, "Falló el fork() %s\n" , strerror(errno));
             exit(1);
         } else if(all_pids[i] == 0){
-            //Si hay redirección, todo los procesos se ejecutan en bg
+            //Si el mandato se ejecuta en bg, el bg afecta a todos los procesos 
             redireccion_bg(linea);
             for(int j=0; j<(linea->ncommands - 1); j++) {
                 //Comprobamos en que hijo está, y por tanto, que pipes puede cerrar completamente
