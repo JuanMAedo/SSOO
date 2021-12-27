@@ -2,12 +2,12 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include "parser.h"
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include "parser.h" //Importamos la librería para tokenizar la entrada
 
 void redireccion_entrada(tline *linea);
 void redireccion_salida(tline *linea);
@@ -157,20 +157,22 @@ void redireccion_1comando(tline *linea){
         //Cambio las señales en el hijo, dado que el Padre tiene que mantener ignorando las SIGINT y SIGQUIT
         redireccion_bg(linea);
         execvp(linea->commands[0].filename, linea->commands->argv);
-         // Si ejecuta esta parte del código, implica fallo en el execvp
+        // Si ejecuta esta parte del código, implica fallo en el execvp
         fprintf(stderr, "Error al ejecutar el comando %s : %s\n", linea->commands[0].argv[0] , strerror(errno));
         exit(1);
-    } 
-    wait(&status);
+    }else 
+        wait(&status);
 } 
 void redireccion_varios_comandos(tline *linea){
     pid_t all_pids[linea->ncommands];
     int i,pipes[linea->ncommands - 1][2];
+    //Creamos todas las pipes que se van a usar 
     for( i = 0; i < linea->ncommands - 1; i++){
         if(pipe(pipes[i]) < 0){
             fprintf(stderr, "Falló crear el pipe %s/n" , strerror(errno));
         }    
     }
+    //Creo un hijo por cada mandato
     for( i = 0; i < linea->ncommands; i++){
         all_pids[i] = fork();
         if(all_pids[i] < 0){
@@ -186,15 +188,15 @@ void redireccion_varios_comandos(tline *linea){
                     close(pipes[j][0]);
                 }
             }
-            //En caso de que hijo sea, cierra la I/O de las pipes que no interesa, y reescribe en el descriptor que use   
+            //En caso cada hijo, cerrar los pipes necesarios que no hemos podido cerrar antes y modificar la entrada y salida estándar en las pipes correspondientes     
             if(i == 0){
                 close(pipes[0][0]);
                 dup2(pipes[0][1],1);
             }else if(i > 0 && i < (linea->ncommands - 1)){  
                 close(pipes[i-1][1]);
                 close(pipes[i][0]);
-		dup2(pipes[i-1][0],0);
-		dup2(pipes[i][1],1);   
+                dup2(pipes[i-1][0],0);
+                dup2(pipes[i][1],1);   
             }else if((linea->ncommands - 1) == i){
                 close(pipes[i-1][1]);
                 dup2(pipes[i-1][0],0);   
@@ -223,9 +225,6 @@ void comando_cd(tline * linea){
         fprintf(stderr, "Error al ejecutar '%s %s' : %s\n" , linea->commands[0].argv[0],linea->commands[0].argv[1], strerror(errno));
     }
 }
-
-void comando_fg(tline * linea){
-
-}
-
+//No desarrollados
+void comando_fg(tline * linea){}
 void comando_jobs(tline * linea){}
