@@ -68,5 +68,6 @@ void configuracion (char * entrada, char * salida){
             configuracion_inicial[i] = 1;
             printf("El parámetro %d ha sido establecido en 1 seg, ya que es su tiempo mínimo\n", i+1);
         }
+    
     }
 }
