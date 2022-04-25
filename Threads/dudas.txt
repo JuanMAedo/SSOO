@@ -10,3 +10,4 @@
     nº vacunas disponibles
     array habitantes en cola --> ¿FORMA DE SABER QUE ES + PRIORITARIO QUE OTROS CENTROS?
 7)Cómo hacer que la salida sea por pantalla y en fichero --> fork implica hacer el == codigo 2 veces por lo que serían dos ejecuciones independientes(?)     
+8) Ejercicios de clase pasa por referencia los atributos --> pq con void y luego hacer el cast

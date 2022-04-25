@@ -12,19 +12,18 @@
 #define CENTROS_VACUNACION 5
 #define FABRICAS 3
 
-// Consideramos que la aplicación tendrá 3 hilos:
-// 1º - Hilo: elección al centro de vacunación que acudirá cada habitante
-// 2º - Hilo: vacunaciñon del habitante x en cada centro
-// 3º - Hilo: fabricas de las vacunas entregas en los 5 centros
-
 void configuracion(char * entrada, char * salida);
 void impresion_configuracion(int configuracion []);
+void * habitante(void *num);
+void * fabrica(void *num);
 
 
 // Declaración variables globales
 int configuracion_inicial[9];
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
+
+
 
 int main(int argc, char * argv[]){
     int * fil_id;
@@ -43,25 +42,37 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Error, número de argumentos incorrecto.\n");
         exit(1);
     }
+
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
     impresion_configuracion(configuracion_inicial);
 
-
-    // A partir de ello 
     // rand()% [INTERVALO +1]+[MINIMO] cuando el número aleatorio debe estar entre 2 valores
 
-                            //pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
-
-    //Reservo el array dinámico con los índices de cada habitante, y compruebo que no revase la memoria o que halla fallo en la reserva  
+    //Reservo el array dinámico con los índices de cada habitante, y compruebo que no revase la memoria o que halla fallo en la reserva.
+    //Además creo un array con los índices para luego poder controlar si se ha creado o no el hilo de ese habitante  
     if ((fil_id = (int *) malloc(sizeof(int) * configuracion_inicial[0]))== NULL){
 		puts("Error de memoria\n");
 		exit(1);
     }
-    for(int i = 1; i < configuracion_inicial[0]; i++) {
-		fil_id[i-1] = i;// De esta manera empiezo en 1 hasta el nº total de habitantes, no en 1 menos todo
+    for(int i = 0; i < configuracion_inicial[0]; i++) {
+		fil_id[i] = i+1;// De esta manera empiezo en 1 hasta el nº total de habitantes, no en 1 menos todo
+
+        // Consideramos que la aplicación tendrá x hilos de los habitantes:
+        // Cada hilo tendrá varias secciones, que se ejecutarán por tandas
+        //La 1º sección, los habitantes se irán colocando en los diferentes centros de vacunación
+        //La 2º sección, los habitantes serán vacunados y los que no puedan serlo por falta de vacunas se pondrán a la espera
+        //Por otro lado, tendrá 3 hilos que corresponden a la fabricación de vacunas
+
     }
     
+    // Para crear un hilo --> pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
+    // Seguramente necesitemos mutex/semaforos, por lo que mirar en teoría la cabecera
 }
+
+
+
+void *habitante(void * num){};
+void *fabrica(void * num){};
 
 void configuracion (char * entrada, char * salida){
     char buffer[1024];
@@ -94,7 +105,6 @@ void configuracion (char * entrada, char * salida){
     
     }
 }
-
 void impresion_configuracion(int configuracion []){
     printf("VACUNACIÓN EN PANDEMIA: CONFIGURACIÓN INICIAL\n");
     printf("Habitantes: %d\n", configuracion[0]);
