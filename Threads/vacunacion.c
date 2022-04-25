@@ -27,6 +27,8 @@ char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
 
 int main(int argc, char * argv[]){
+    int * fil_id;
+
     //Comprobamos las entradas de los ficheros
     if (argc == 1){// Uso entrada_vacunacion.txt y salida_vacunacion.txt 
         configuracion(entrada_defecto, salida_defecto);  
@@ -37,16 +39,28 @@ int main(int argc, char * argv[]){
         char* nombre_entrada = argv[1];
         char* nombre_salida = argv[2];
         configuracion(nombre_entrada,nombre_salida); 
-    }else{
+    }else{//Error con el número de argumentos
         fprintf(stderr, "Error, número de argumentos incorrecto.\n");
         exit(1);
     }
-    impresion_configuracion(configuracion_inicial);
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
+    impresion_configuracion(configuracion_inicial);
+
+
     // A partir de ello 
     // rand()% [INTERVALO +1]+[MINIMO] cuando el número aleatorio debe estar entre 2 valores
 
-    //pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
+                            //pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
+
+    //Reservo el array dinámico con los índices de cada habitante, y compruebo que no revase la memoria o que halla fallo en la reserva  
+    if ((fil_id = (int *) malloc(sizeof(int) * configuracion_inicial[0]))== NULL){
+		puts("Error de memoria\n");
+		exit(1);
+    }
+    for(int i = 1; i < configuracion_inicial[0]; i++) {
+		fil_id[i-1] = i;// De esta manera empiezo en 1 hasta el nº total de habitantes, no en 1 menos todo
+    }
+    
 }
 
 void configuracion (char * entrada, char * salida){
@@ -55,7 +69,7 @@ void configuracion (char * entrada, char * salida){
     int fdescriptor = open(entrada, O_RDONLY); 
     //Realizamos los cambios en la tabla de descriptores necesarias para la entrada
     if (fdescriptor == -1){
-        fprintf(stderr, "%s: Error, asociado al descriptor de entrada: %s.\n", entrada, strerror(errno));
+        fprintf(stderr, "%s: Error asociado al descriptor de entrada: %s.\n", entrada, strerror(errno));
         exit(1);
     }else{
         // No hay error y se escribe el descriptor
