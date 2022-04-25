@@ -1,0 +1,12 @@
+1)Los centros de vacunación comienzan con x vacunas cada uno, si las empresas crean el nº vacunas = nº habitantes, sobran, o contar que las fabricadas son = pob - iniciales
+2)Cómo plantear que el nº de vacunas que se entrega a cada centro depende de su demanda
+3)9 tandas random, última total - acumulado
+4)Creación de array dinamico --> malloc para el nº de habitantes : como hacer un tipo de dato para añadir:
+    nº habitante
+    centro elegido
+    vacunado o no
+5)Creación de una tanda --> hilo que simula comportamiento de cada habitante o cada hilo 1 habitante(?)     
+6)Centro de vacunación --> malloc con variable de 5m datos:
+    nº vacunas disponibles
+    array habitantes en cola --> ¿FORMA DE SABER QUE ES + PRIORITARIO QUE OTROS CENTROS?
+7)Cómo hacer que la salida sea por pantalla y en fichero --> fork implica hacer el == codigo 2 veces por lo que serían dos ejecuciones independientes(?)     

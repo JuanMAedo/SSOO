@@ -15,7 +15,12 @@
 // 3º - Hilo: fabricas de las vacunas entregas en los 5 centros
 
 void configuracion(char * entrada, char * salida);
+void impresion_configuracion(int configuracion []);
+
+
 // Declaración variables globales
+int centros_vacunacion = 5;
+int fabricas = 3;
 int configuracion_inicial[9];
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
@@ -35,9 +40,11 @@ int main(int argc, char * argv[]){
         fprintf(stderr, "Error, número de argumentos incorrecto.\n");
         exit(1);
     }
-
+    impresion_configuracion(configuracion_inicial);
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
     // A partir de ello 
+
+    // rand()% [INTERVALO +1]+[MINIMO] cuando el número aleatorio debe estar entre 2 valores
 }
 
 void configuracion (char * entrada, char * salida){
@@ -70,4 +77,21 @@ void configuracion (char * entrada, char * salida){
         }
     
     }
+}
+
+void impresion_configuracion(int configuracion []){
+    printf("VACUNACIÓN EN PANDEMIA: CONFIGURACIÓN INICIAL\n");
+    printf("Habitantes: %d\n", configuracion[0]);
+    printf("Centros de Vacunación: %d \n", centros_vacunacion);
+    printf("Fábricas de Vacunas: %d\n", fabricas);
+    printf("Vacunados por tanda: %d\n", configuracion[0]/10);
+    printf("Vacunas Iniciales en cada Centro: %d\n",configuracion[1]);
+    printf("Vacunas totales por fábrica: %d\n", configuracion[0]/fabricas);
+    printf("Mínimo número de vacunas fabricadas en cada tanda: %d\n", configuracion[2]);
+    printf("Máximo número de vacunas fabricadas en cada tanda: %d\n", configuracion[3]);
+    printf("Tiempo mínimo de fabricación de una tanda de vacunas: %d\n", configuracion[4]);
+    printf("Tiempo máximo de fabricación de una tanda de vacunas: %d\n", configuracion[5]);
+    printf("Tiempo máximo de reparto de vacunas a los centros: %d\n",configuracion[6]);
+    printf("Tiempo máximo que un habitante tarda en ver que está citado para vacunarse: %d\n", configuracion[7]);
+    printf("Tiempo máximo de desplazamiento del habitante al centro de vacunación: %d\n\n", configuracion[8]);
 }
