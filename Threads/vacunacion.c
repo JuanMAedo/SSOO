@@ -7,7 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include <pthread.h>
 
+#define CENTROS_VACUNACION 5
+#define FABRICAS 3
 
 // Consideramos que la aplicación tendrá 3 hilos:
 // 1º - Hilo: elección al centro de vacunación que acudirá cada habitante
@@ -19,8 +22,6 @@ void impresion_configuracion(int configuracion []);
 
 
 // Declaración variables globales
-int centros_vacunacion = 5;
-int fabricas = 3;
 int configuracion_inicial[9];
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
@@ -43,15 +44,16 @@ int main(int argc, char * argv[]){
     impresion_configuracion(configuracion_inicial);
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
     // A partir de ello 
-
     // rand()% [INTERVALO +1]+[MINIMO] cuando el número aleatorio debe estar entre 2 valores
+
+    //pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
 }
 
 void configuracion (char * entrada, char * salida){
     char buffer[1024];
     int contador = 0;
     int fdescriptor = open(entrada, O_RDONLY); 
-    //Realizamos los cambios en la tabla de descrpitores necesarias para la entrada
+    //Realizamos los cambios en la tabla de descriptores necesarias para la entrada
     if (fdescriptor == -1){
         fprintf(stderr, "%s: Error, asociado al descriptor de entrada: %s.\n", entrada, strerror(errno));
         exit(1);
@@ -82,11 +84,11 @@ void configuracion (char * entrada, char * salida){
 void impresion_configuracion(int configuracion []){
     printf("VACUNACIÓN EN PANDEMIA: CONFIGURACIÓN INICIAL\n");
     printf("Habitantes: %d\n", configuracion[0]);
-    printf("Centros de Vacunación: %d \n", centros_vacunacion);
-    printf("Fábricas de Vacunas: %d\n", fabricas);
+    printf("Centros de Vacunación: %d \n", CENTROS_VACUNACION);
+    printf("Fábricas de Vacunas: %d\n", FABRICAS);
     printf("Vacunados por tanda: %d\n", configuracion[0]/10);
     printf("Vacunas Iniciales en cada Centro: %d\n",configuracion[1]);
-    printf("Vacunas totales por fábrica: %d\n", configuracion[0]/fabricas);
+    printf("Vacunas totales por fábrica: %d\n", configuracion[0]/FABRICAS);
     printf("Mínimo número de vacunas fabricadas en cada tanda: %d\n", configuracion[2]);
     printf("Máximo número de vacunas fabricadas en cada tanda: %d\n", configuracion[3]);
     printf("Tiempo mínimo de fabricación de una tanda de vacunas: %d\n", configuracion[4]);
