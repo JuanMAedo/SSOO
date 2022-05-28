@@ -17,26 +17,40 @@ void impresion_configuracion(int configuracion []);
 void * habitante(void *num);
 void * fabrica(void *num);
 
+// Declaro el centro de vacunación y la fábrica como un tipo de dato para un manejo de los recursos más fácil
 typedef struct {
     int vacunas_disponibles;
     int lista_espera;
     int vacunados;
 } centro_vacunacion;
 
-// Declaración variables globales
+typedef struct {
+    int vacunas_a_entregar;
+    int vacunas_entregadas;
+    int centros_entregados[CENTROS_VACUNACION];
+} t_fabrica;
+
+// DECLARACIÓN DE VARIABLES GLOBALES
+
+// Para los hilos:
+pthread_mutex_t mutex[CENTROS_VACUNACION];
+pthread_cond_t espera[CENTROS_VACUNACION];
+
+// Para las fábricas y centros de vacunación:
+centro_vacunacion centros_vacunacion[CENTROS_VACUNACION];
+t_fabrica fabricas[FABRICAS];
+
+// Para entrada y salida:
 int configuracion_inicial[9], vacunas_a_fabricar;
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
-centro_vacunacion centros_vacunacion[CENTROS_VACUNACION];
-pthread_mutex_t mutex[CENTROS_VACUNACION];
-pthread_cond_t espera[CENTROS_VACUNACION];
-int hola = 0;
+
 
 int main(int argc, char * argv[]){
-    int * habitantes_id;
+    // Variables usadas por el main del programa
+    int * habitantes_id, * fabricas_id;
     pthread_t th;
     
-
     //Comprobamos las entradas de los ficheros
     if (argc == 1){// Uso entrada_vacunacion.txt y salida_vacunacion.txt 
         configuracion(entrada_defecto, salida_defecto);  
@@ -53,20 +67,27 @@ int main(int argc, char * argv[]){
     }
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
     impresion_configuracion(configuracion_inicial);
+
     //Reservo el array dinámico con los índices de cada habitante, y compruebo que no revase la memoria o que halla fallo en la reserva.
     //Además creo un array con los índices para luego poder controlar si se ha creado o no el hilo de ese habitante  
     if ((habitantes_id = (int *) malloc(sizeof(int) * configuracion_inicial[0]))== NULL){
 		puts("Error de memoria\n");
 		exit(1);
     }
-    for(int i = 0; i < configuracion_inicial[0]; i++) {
-		habitantes_id[i] = i+1;// De esta manera empiezo en 1 hasta el nº total de habitantes, no en 0 
-    }
+    // Creo el mutex y la mutex_cond necesarios para controlar que en los centros de vacunación hay vacunas, y preservar que no accedan
+    // a los recursos de los centros a la vez, preservando correctamente sus valores
     for(int i = 0; i < CENTROS_VACUNACION; i++) {
 		pthread_mutex_init(&mutex[i],NULL);
         pthread_cond_init(&espera[i], NULL);
     }
+    // Creo las fábricas
+	for(int i = 0; i < FABRICAS; i++) {
+        fabricas_id[i] = i+1;
+        pthread_create(&th,NULL,fabrica,(void*)&fabricas_id[i]);
+	}
+    // Creo los habitantes
 	for(int i = 0; i < 10; i++) {
+        habitantes_id[i] = i+1;
         pthread_create(&th,NULL,habitante,(void*)&habitantes_id[i]);
 	}
     sleep(20);
@@ -74,12 +95,7 @@ int main(int argc, char * argv[]){
     printf("%d %d \n",i, centros_vacunacion[i].vacunas_disponibles);
     printf("%d %d \n",i, centros_vacunacion[i].lista_espera);
     printf("%d %d \n",i, centros_vacunacion[i].vacunados);
-    }// La 1º sección, los habitantes se irán colocando en los diferentes centros de vacunación
-    // La 2º sección, los habitantes serán vacunados y los que no puedan serlo por falta de vacunas se pondrán a la espera
-    // Por otro lado, tendrá 3 hilos que corresponden a la fabricación de vacunas
-    // Para crear un hilo --> pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
-    // Seguramente necesitemos mutex/semaforos, por lo que mirar en teoría la cabecera
-
+    }
 	
     // Ejemplo: fputs (“cadena”, nombreInternoFichero);
     // Ejemplo: fprintf (fichero, "%s %d", cadena1, num); Escribe como texto a un archivo los datos transformando el formato especificado en texto
@@ -87,21 +103,32 @@ int main(int argc, char * argv[]){
 
 
 
-void *habitante(void * num){	
+void *habitante(void * num){
+    // variables usadas por el thread	
 	int fil_id = *(int *)num;
     int aleatorio;
-	
-    sleep(rand() % (configuracion_inicial[7]) + (1));
     aleatorio = (rand() % (5) + (1));
+	// El habitante tarda un tiempo random en reaccionar al mensaje de ser vacunado
+    sleep(rand() % (configuracion_inicial[7]) + (1));
+
+    // El habitante elige un centro de vacunación y se pone en la lista de espera de ese centro ( de ahí el mutex usado)
     pthread_mutex_lock(&mutex[aleatorio]);
+
+    // Sección crítica del mutex
     printf("Habitante %d elige centro de vacunacion %d\n", fil_id,aleatorio);
     centros_vacunacion[aleatorio].lista_espera += 1;
     pthread_mutex_unlock(&mutex[aleatorio]); 
+
+    // El habitante tarda un tiempo random en acudir al centro de vacunación
     sleep(rand() % (configuracion_inicial[8]) + (1));
-    //
-    pthread_mutex_lock(&mutex[aleatorio]); // Espera para poder modificar el estado		
-		while(centros_vacunacion[aleatorio].vacunas_disponibles < 1)
-			pthread_cond_wait(&espera[aleatorio], &mutex[aleatorio]);
+
+    // Se va a modificar el nº de vacunas, el nº de vacunados y la lista de espera, por ello el mutex
+    pthread_mutex_lock(&mutex[aleatorio]);
+    // En caso de que no se disponga de vacunas, se espera a que el centro las reciba de la fábrica --> condición de espera
+    while(centros_vacunacion[aleatorio].vacunas_disponibles < 1){
+        pthread_cond_wait(&espera[aleatorio], &mutex[aleatorio]);
+    }    
+    // Sección crítica del mutex        
     printf("Habitante %d vacunado en el centro %d\n", fil_id,aleatorio);
     centros_vacunacion[aleatorio].lista_espera -= 1;
     centros_vacunacion[aleatorio].vacunas_disponibles -= 1;
@@ -109,13 +136,15 @@ void *habitante(void * num){
     centros_vacunacion[aleatorio].vacunados += 1;
     pthread_mutex_unlock(&mutex[aleatorio]); 
     
-    //Destrucción del hilo, ya que el habitante ya se ha vacunado
+    //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
     pthread_exit(0);
 
 }
 
 void *fabrica(void * num){
-
+    // variables usadas por el thread	
+    int fil_id = *(int *)num;
+    int aleatorio;
     //pthread_cond_signal(&espera[fil_id]);
 };
 
@@ -156,7 +185,14 @@ void configuracion (char * entrada, char * salida){
         centros_vacunacion[i].vacunados = 0;
         centros_vacunacion[i].lista_espera = 0; 
     }
+    for (int i = 0; i < FABRICAS; i++){
+        fabricas[i].vacunas_a_entregar = vacunas_a_fabricar/3;
+        fabricas[i].vacunas_entregadas = 0;
+        fabricas[i].vacunas_entregadas = 0;
+    }
+
 }
+
 void impresion_configuracion(int configuracion []){
     printf("VACUNACIÓN EN PANDEMIA: CONFIGURACIÓN INICIAL\n");
     printf("Habitantes: %d\n", configuracion[0]);
