@@ -72,6 +72,9 @@ int main(int argc, char * argv[]){
     // Para crear un hilo --> pthread_create(pthread_t *tid, pthread_attr_t *attr,void *funcion, void *param)
     // Seguramente necesitemos mutex/semaforos, por lo que mirar en teoría la cabecera
 
+	
+    // Ejemplo: fputs (“cadena”, nombreInternoFichero);
+    // Ejemplo: fprintf (fichero, "%s %d", cadena1, num); Escribe como texto a un archivo los datos transformando el formato especificado en texto
 }
 
 
