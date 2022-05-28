@@ -28,6 +28,7 @@ int configuracion_inicial[9], vacunas_a_fabricar;
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
 centro_vacunacion centros_vacunacion[CENTROS_VACUNACION];
+pthread_mutex_t mutex;
 
 int main(int argc, char * argv[]){
     int * habitantes_id;
@@ -50,9 +51,6 @@ int main(int argc, char * argv[]){
     }
     // En el array configuracion_inicial tenemos las 9 posiciones con los parametros necesarios para la vacunación
     impresion_configuracion(configuracion_inicial);
-
-    // rand()% [INTERVALO +1]+[MINIMO] cuando el número aleatorio debe estar entre 2 valores
-
     //Reservo el array dinámico con los índices de cada habitante, y compruebo que no revase la memoria o que halla fallo en la reserva.
     //Además creo un array con los índices para luego poder controlar si se ha creado o no el hilo de ese habitante  
     if ((habitantes_id = (int *) malloc(sizeof(int) * configuracion_inicial[0]))== NULL){
@@ -62,7 +60,12 @@ int main(int argc, char * argv[]){
     for(int i = 0; i < configuracion_inicial[0]; i++) {
 		habitantes_id[i] = i+1;// De esta manera empiezo en 1 hasta el nº total de habitantes, no en 1 menos todo
     }
-    
+    pthread_mutex_init(&mutex,NULL);
+	for(int i = 0; i < configuracion_inicial[0]; i++) {
+		pthread_cond_init(&espera[i], NULL);
+		habitantes_id[i] = i;
+		pthread_create(&th,NULL,habitante,(void*)&habitantes_id[i]);
+	}
     // La 1º sección, los habitantes se irán colocando en los diferentes centros de vacunación
     // La 2º sección, los habitantes serán vacunados y los que no puedan serlo por falta de vacunas se pondrán a la espera
     // Por otro lado, tendrá 3 hilos que corresponden a la fabricación de vacunas
@@ -87,7 +90,7 @@ void *habitante(void * num){
     //
     pthread_mutex_lock(&centros_vacunacion[aleatorio]); // Espera para poder modificar el estado		
 		while(centros_vacunacion[aleatorio].vacunas_disponibles < 1)
-			pthread_cond_wait(&centros_vacunacion[aleatorio], &mutex);
+			pthread_cond_wait(&espera[aleatorio], &mutex);
     printf("Habitante %d vacunado en el centro %d\n", fil_id,aleatorio);
     centros_vacunacion[aleatorio].lista_espera -= 1;
     centros_vacunacion[aleatorio].vacunas_disponibles -= 1;
