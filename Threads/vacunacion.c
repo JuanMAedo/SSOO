@@ -11,6 +11,7 @@
 
 #define CENTROS_VACUNACION 5
 #define FABRICAS 3
+#define TANDAS_VACUNACION 10
 
 void configuracion(char * entrada, char * salida);
 void impresion_configuracion(int configuracion []);
@@ -74,8 +75,7 @@ int main(int argc, char * argv[]){
 		puts("Error de memoria\n");
 		exit(1);
     }
-    // Creo el mutex y la mutex_cond necesarios para controlar que en los centros de vacunación hay vacunas, y preservar que no accedan
-    // a los recursos de los centros a la vez, preservando correctamente sus valores
+    // Creo mutex y cond igual al nº de centros de vacunación. Esto se debe a que el centro de vacunación va a poseer todos los recursos necesarios a modificar
     for(int i = 0; i < CENTROS_VACUNACION; i++) {
 		pthread_mutex_init(&mutex[i],NULL);
         pthread_cond_init(&espera[i], NULL);
@@ -86,15 +86,15 @@ int main(int argc, char * argv[]){
         pthread_create(&th,NULL,fabrica,(void*)&fabricas_id[i]);
 	}
     // Creo los habitantes
-	for(int i = 0; i < 10; i++) {
+	for(int i = 0; i < (configuracion_inicial[0]/ TANDAS_VACUNACION); i++) {
         habitantes_id[i] = i+1;
         pthread_create(&th,NULL,habitante,(void*)&habitantes_id[i]);
 	}
     sleep(20);
     for(int i =0; i< CENTROS_VACUNACION; i++){
-    printf("%d %d \n",i, centros_vacunacion[i].vacunas_disponibles);
-    printf("%d %d \n",i, centros_vacunacion[i].lista_espera);
-    printf("%d %d \n",i, centros_vacunacion[i].vacunados);
+        printf("%d %d \n",i, centros_vacunacion[i].vacunas_disponibles);
+        printf("%d %d \n",i, centros_vacunacion[i].lista_espera);
+        printf("%d %d \n",i, centros_vacunacion[i].vacunados);
     }
 	
     // Ejemplo: fputs (“cadena”, nombreInternoFichero);
@@ -107,7 +107,7 @@ void *habitante(void * num){
     // variables usadas por el thread	
 	int fil_id = *(int *)num;
     int aleatorio;
-    aleatorio = (rand() % (5) + (1));
+    aleatorio = (rand() % CENTROS_VACUNACION); // El centro de vacunación será entre el 0 - 4
 	// El habitante tarda un tiempo random en reaccionar al mensaje de ser vacunado
     sleep(rand() % (configuracion_inicial[7]) + (1));
 
@@ -115,7 +115,7 @@ void *habitante(void * num){
     pthread_mutex_lock(&mutex[aleatorio]);
 
     // Sección crítica del mutex
-    printf("Habitante %d elige centro de vacunacion %d\n", fil_id,aleatorio);
+    printf("Habitante %d elige centro de vacunacion %d\n", fil_id,aleatorio+1);
     centros_vacunacion[aleatorio].lista_espera += 1;
     pthread_mutex_unlock(&mutex[aleatorio]); 
 
@@ -129,10 +129,9 @@ void *habitante(void * num){
         pthread_cond_wait(&espera[aleatorio], &mutex[aleatorio]);
     }    
     // Sección crítica del mutex        
-    printf("Habitante %d vacunado en el centro %d\n", fil_id,aleatorio);
+    printf("Habitante %d vacunado en el centro %d\n", fil_id,aleatorio+1);
     centros_vacunacion[aleatorio].lista_espera -= 1;
     centros_vacunacion[aleatorio].vacunas_disponibles -= 1;
-    printf("El centro %d tiene %d vacunas\n", aleatorio,centros_vacunacion[aleatorio].vacunas_disponibles);
     centros_vacunacion[aleatorio].vacunados += 1;
     pthread_mutex_unlock(&mutex[aleatorio]); 
     
@@ -144,9 +143,37 @@ void *habitante(void * num){
 void *fabrica(void * num){
     // variables usadas por el thread	
     int fil_id = *(int *)num;
-    int aleatorio;
+    int aleatorio ;
+
+    //Realizo este proceso 9 veces
+    for (int i=1; i < TANDAS_VACUNACION;i++){
+
+        aleatorio = _rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
+        // Tiempo de fabricación de las vacunas
+        sleep(rand() % (configuracion_inicial[5] - configuracion_inicial[4] + 1) + configuracion_inicial[4]);
+        // Actualizo el stock de mi fábrica
+        fabricas[fil_id-1].vacunas_a_entregar = aleatorio;
+        // Tiempo que tardo en repartir las vacunas a los centros
+        sleep(rand() % (configuracion_inicial[6]) + 1);
+
+        // Paro todos los centros de vacunación para ver la lista de espera que tienen en ese momento y poder dar prioridad
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            pthread_mutex_lock(&mutex[i]); 
+        }
+
+        // Sección crítica
+        printf("Fábrica %d prepara %d vacunas\n", fil_id,aleatorio);
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            //fabricas[fil_id].centros_entregados[j] = 
+        }
+
+
+
+    }
+    
     //pthread_cond_signal(&espera[fil_id]);
 };
+
 
 void configuracion (char * entrada, char * salida){
     char buffer[1024];
@@ -185,6 +212,7 @@ void configuracion (char * entrada, char * salida){
         centros_vacunacion[i].vacunados = 0;
         centros_vacunacion[i].lista_espera = 0; 
     }
+    // Damos los valores iniciales a cada fábrica
     for (int i = 0; i < FABRICAS; i++){
         fabricas[i].vacunas_a_entregar = vacunas_a_fabricar/3;
         fabricas[i].vacunas_entregadas = 0;
@@ -208,4 +236,19 @@ void impresion_configuracion(int configuracion []){
     printf("Tiempo máximo de reparto de vacunas a los centros: %d\n",configuracion[6]);
     printf("Tiempo máximo que un habitante tarda en ver que está citado para vacunarse: %d\n", configuracion[7]);
     printf("Tiempo máximo de desplazamiento del habitante al centro de vacunación: %d\n\n", configuracion[8]);
+}
+
+void prioritarios (){
+    int prioritarios [CENTROS_VACUNACION];
+    for (int i = 0; i < CENTROS_VACUNACION, i++){
+        prioritarios[i] = centros_vacunacion[i].lista_espera;
+    }
+    for (j = i + 1; j < n; ++j) {
+        if (prioritarios[i] > prioritarios[j]) {
+            aux =  prioritarios[i];
+            prioritarios[i] = prioritarios[j];
+
+            prioritarios[j] = aux;
+
+ 
 }
