@@ -80,6 +80,7 @@ int main(int argc, char * argv[]){
 		exit(1);
     }
     // Creo mutex y cond igual al nº de centros de vacunación. Esto se debe a que el centro de vacunación va a poseer todos los recursos necesarios a modificar
+    //pthread_mutexattr_setrobust;
     for(int i = 0; i < CENTROS_VACUNACION; i++) {
 		pthread_mutex_init(&mutex[i],NULL);
         pthread_cond_init(&espera[i], NULL);
@@ -101,13 +102,16 @@ int main(int argc, char * argv[]){
     
     while (habitantes_vacunados != configuracion_inicial[0]){
     }
-    printf("******** VACUNACIÓN FINALIZADA ********\n");
+    for(int i = 0; i < CENTROS_VACUNACION; i++) {
+		pthread_mutex_destroy(&mutex[i]);
+        pthread_cond_destroy(&espera[i]);
+    }
+
+    printf("\n******** VACUNACIÓN FINALIZADA ********\n\n");
 	impresion_estadisticas();
     // Ejemplo: fputs (“cadena”, nombreInternoFichero);
     // Ejemplo: fprintf (fichero, "%s %d", cadena1, num); Escribe como texto a un archivo los datos transformando el formato especificado en texto
 }
-
-
 
 void *habitante(void * num){
     // variables usadas por el thread	
@@ -146,20 +150,19 @@ void *habitante(void * num){
     
     //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
     pthread_exit(0);
-
 }
 
 void *fabrica(void * num){
     // variables usadas por el thread	
     int fil_id = *(int *)num;
-    int aux, aleatorio,vacunas_asignadas, vacunas_a_entregar[CENTROS_VACUNACION];
+    int aux, aleatorio,vacunas_asignadas, vacunas_a_entregar_aux[CENTROS_VACUNACION];
     //Realizo este proceso 9 veces
-    for (int i=1; i <= TANDAS_VACUNACION + 1;i++){
-        if (i< TANDAS_VACUNACION){
-            aleatorio = rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
-        }else if (i == TANDAS_VACUNACION) {
-            aleatorio =  fabricas[fil_id].vacunas_a_entregar - fabricas[fil_id].vacunas_entregadas;
+    while(fabricas[fil_id-1].vacunas_a_fabricar > configuracion_inicial[3]){
+        aleatorio = rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
+        if (aleatorio > fabricas[fil_id-1].vacunas_a_fabricar){
+            aleatorio = fabricas[fil_id-1].vacunas_a_fabricar;
         }
+
         // Tiempo de fabricación de las vacunas
         sleep(rand() % (configuracion_inicial[5] - configuracion_inicial[4] + 1) + configuracion_inicial[4]);
         // Actualizo el stock de mi fábrica
@@ -174,33 +177,87 @@ void *fabrica(void * num){
 
         // Sección crítica
         printf("Fábrica %d prepara %d vacunas\n", fil_id,aleatorio);
-        printf("Fábrica %d ronda %d\n", fil_id,i);
         calc_porcentajes();
         vacunas_asignadas = 0;
         for( int j = 0; j < CENTROS_VACUNACION; j++){
             // Actualizamos la demanda existente en los centros de vacunación
-            vacunas_a_entregar[j] = (int) (porcentajes[j] * aleatorio);
-            vacunas_asignadas += vacunas_a_entregar[j];
+            vacunas_a_entregar_aux[j] = (int) (porcentajes[j] * aleatorio);
+            vacunas_asignadas += vacunas_a_entregar_aux[j];
         }
         // Al usar procentajes, en ocasiones no se conseguían repartir todas, por ello usamos este reajuste entregando las sobrante de forma aleatoria
-        vacunas_a_entregar[rand() % CENTROS_VACUNACION] += aleatorio - vacunas_asignadas;
+        vacunas_a_entregar_aux[rand() % CENTROS_VACUNACION] += aleatorio - vacunas_asignadas;
 
 
         for( int j = 0; j < CENTROS_VACUNACION; j++){
-            printf("Fábrica %d entrega %d vacunas al centro %d \n", fil_id,vacunas_a_entregar[j] ,j+1);
-            fabricas[fil_id].centros_entregados[j] += vacunas_a_entregar[j];
-            centros_vacunacion[j].vacunas_disponibles += vacunas_a_entregar[j];
+            if (vacunas_a_entregar_aux[j] < 0){
+                vacunas_a_entregar_aux[j] = 0;
+            }
+            printf("Fábrica %d entrega %d vacunas al centro %d \n", fil_id,vacunas_a_entregar_aux[j] ,j+1);
+            fabricas[fil_id-1].centros_entregados[j] += vacunas_a_entregar_aux[j];
+            centros_vacunacion[j].vacunas_disponibles += vacunas_a_entregar_aux[j];
         }
-                    
-        fabricas[fil_id].vacunas_a_fabricar -= aleatorio;
-        fabricas[fil_id].vacunas_entregadas += aleatorio;
+
+        fabricas[fil_id-1].vacunas_a_fabricar -= aleatorio;
+        fabricas[fil_id-1].vacunas_entregadas += aleatorio;
+
         for( int i = 0; i < CENTROS_VACUNACION; i++){
             pthread_cond_broadcast(&espera[i]); 
-            pthread_mutex_unlock(&mutex[i]);
+        }  
+        for( int i = 0; i < CENTROS_VACUNACION; i++){
+            pthread_mutex_unlock(&mutex[i]); 
         }        
-    }
-    printf("Fábrica %d ha fabricado todas sus vacunas\n", fil_id);
 
+    }
+
+    //La última tanda de fabricación debe repartir según la demanda exacta que se tenga, no según porcentajes dado su posible error
+    if (fabricas[fil_id-1].vacunas_a_fabricar != 0) {
+        aleatorio =  fabricas[fil_id-1].vacunas_a_fabricar;
+                // Tiempo de fabricación de las vacunas
+        sleep(rand() % (configuracion_inicial[5] - configuracion_inicial[4] + 1) + configuracion_inicial[4]);
+        // Actualizo el stock de mi fábrica
+        fabricas[fil_id-1].vacunas_a_entregar += aleatorio;
+        // Tiempo que tardo en repartir las vacunas a los centros
+        sleep(rand() % (configuracion_inicial[6]) + 1);
+
+        // Paro todos los centros de vacunación para ver la lista de espera que tienen en ese momento y poder dar prioridad
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            pthread_mutex_lock(&mutex[j]); 
+        }
+
+        // Sección crítica
+        printf("Fábrica %d prepara %d vacunas \n", fil_id,aleatorio);
+        vacunas_asignadas = 0;
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            // Actualizamos la demanda existente en los centros de vacunación
+            if(centros_vacunacion[j].lista_espera > aleatorio){
+                vacunas_a_entregar_aux[j] = aleatorio;
+                break;
+            }
+            vacunas_a_entregar_aux[j] = centros_vacunacion[j].lista_espera;
+            vacunas_asignadas += vacunas_a_entregar_aux[j];
+        }
+        // En caso de sobrar en ese momento, se asignan aleatoriamente
+        vacunas_a_entregar_aux[rand() % CENTROS_VACUNACION] += aleatorio - vacunas_asignadas;
+
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            if (vacunas_a_entregar_aux[j] < 0){
+                vacunas_a_entregar_aux[j] = 0;
+            }
+            printf("Fábrica %d entrega %d vacunas al centro %d \n", fil_id,vacunas_a_entregar_aux[j] ,j+1);
+            fabricas[fil_id-1].centros_entregados[j] += vacunas_a_entregar_aux[j];
+            centros_vacunacion[j].vacunas_disponibles += vacunas_a_entregar_aux[j];
+        }
+        fabricas[fil_id-1].vacunas_a_fabricar -= aleatorio;
+        fabricas[fil_id-1].vacunas_entregadas += aleatorio;
+
+        for( int i = 0; i < CENTROS_VACUNACION; i++){
+            pthread_cond_broadcast(&espera[i]); 
+        }  
+        for( int i = 0; i < CENTROS_VACUNACION; i++){
+            pthread_mutex_unlock(&mutex[i]); 
+        }  
+    }    
+    printf("Fábrica %d ha fabricado todas sus vacunas\n", fil_id);
     //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
     pthread_exit(0);        
 };
@@ -245,9 +302,9 @@ void configuracion (char * entrada, char * salida){
     }
     // Damos los valores iniciales a cada fábrica
     for (int i = 0; i < FABRICAS; i++){
-        fabricas[i].vacunas_a_entregar = vacunas_a_fabricar/3;
+        fabricas[i].vacunas_a_entregar = vacunas_a_fabricar/FABRICAS;
         fabricas[i].vacunas_entregadas = 0;
-        fabricas[i].vacunas_a_fabricar = vacunas_a_fabricar/3;
+        fabricas[i].vacunas_a_fabricar = vacunas_a_fabricar/FABRICAS;
     }
     //Damos los valores iniciales a los porcentajes
     for (int i = 0; i < CENTROS_VACUNACION; i++){
@@ -274,15 +331,18 @@ void impresion_configuracion(int configuracion []){
     printf("Tiempo máximo de desplazamiento del habitante al centro de vacunación: %d\n\n", configuracion[8]);
 }
 
+
 void impresion_estadisticas(){
     for(int i = 0; i< CENTROS_VACUNACION; i++){
         printf("Se han vacunado en el Centro %d: %d \n",i+1,centros_vacunacion[i].vacunados);
     }
+
+    
     for(int i = 0; i< FABRICAS; i++){
+        printf("La fábrica %d ha entregado %d vacunas \n",i+1,fabricas[i].vacunas_entregadas);   
         for(int j = 0; j < CENTROS_VACUNACION; j++){
             printf("La fábrica %d , ha entregado al centro %d : %d vacunas \n",i+1,j+1,fabricas[i].centros_entregados[j]);
         }
-
     }
 }
 
