@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct {
     int vacunas_a_fabricar;
-    int vacunas_a_entregar;
+
     int vacunas_entregadas;
     int centros_entregados[CENTROS_VACUNACION];
 } t_fabrica;
@@ -99,7 +99,6 @@ int main(int argc, char * argv[]){
         while(habitantes_vacunados != habitantes_por_tanda * (j+1)){ 
         }
     }
-    
     while (habitantes_vacunados != configuracion_inicial[0]){
     }
     for(int i = 0; i < CENTROS_VACUNACION; i++) {
@@ -158,7 +157,7 @@ void *fabrica(void * num){
     int aux, aleatorio,vacunas_asignadas, vacunas_a_entregar_aux[CENTROS_VACUNACION];
     //Realizo el bucle siempre que queden vacunas por fabricar
     while(fabricas[fil_id-1].vacunas_a_fabricar > 0){
-        if (fabricas[fil_id-1].vacunas_a_fabricar < configuracion_inicial[3]){
+        if (fabricas[fil_id-1].vacunas_a_fabricar < configuracion_inicial[3]){ 
             aleatorio =  fabricas[fil_id-1].vacunas_a_fabricar;
         }else {
             aleatorio = rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
@@ -167,7 +166,6 @@ void *fabrica(void * num){
         // Tiempo de fabricación de las vacunas
         sleep(rand() % (configuracion_inicial[5] - configuracion_inicial[4] + 1) + configuracion_inicial[4]);
         // Actualizo el stock de mi fábrica
-        fabricas[fil_id-1].vacunas_a_entregar += aleatorio;
         // Tiempo que tardo en repartir las vacunas a los centros
         sleep(rand() % (configuracion_inicial[6]) + 1);
 
@@ -178,46 +176,47 @@ void *fabrica(void * num){
 
         // Sección crítica
         vacunas_asignadas = 0;
-        if (fabricas[fil_id-1].vacunas_a_fabricar < configuracion_inicial[3]){
-            for( int j = 0; j < CENTROS_VACUNACION; j++){
-                // Actualizamos la demanda existente en los centros de vacunación
-                if(centros_vacunacion[j].lista_espera > (aleatorio- vacunas_asignadas)){
-                    vacunas_a_entregar_aux[j] = (aleatorio - vacunas_asignadas);
-                    break;
-                }
-                vacunas_a_entregar_aux[j] = centros_vacunacion[j].lista_espera;
-                vacunas_asignadas += vacunas_a_entregar_aux[j];
-        }
-        } else {
-            calc_porcentajes();
-            for( int j = 0; j < CENTROS_VACUNACION; j++){
-                // Actualizamos la demanda existente en los centros de vacunación
-                vacunas_a_entregar_aux[j] = (int) (porcentajes[j] * aleatorio);
-                vacunas_asignadas += vacunas_a_entregar_aux[j];
+        for( int j = 0; j < CENTROS_VACUNACION; j++){
+            // Actualizamos la demanda existente en los centros de vacunación
+            if(centros_vacunacion[j].lista_espera > (aleatorio - vacunas_asignadas)){
+                vacunas_a_entregar_aux[j] = (aleatorio - vacunas_asignadas);
+                vacunas_asignadas = aleatorio;
+                break;
             }
-        }
-        // Al usar procentajes, en ocasiones no se conseguían repartir todas, por ello usamos este reajuste entregando las sobrante de forma aleatoria
-        vacunas_a_entregar_aux[rand() % CENTROS_VACUNACION] += aleatorio - vacunas_asignadas;
-
+            vacunas_a_entregar_aux[j] = centros_vacunacion[j].lista_espera;
+            vacunas_asignadas += vacunas_a_entregar_aux[j];
+        }// En caso de que sobren vacunas atendiendo a la lista de espera, se reparten aleatoriamente
+        while (vacunas_asignadas < aleatorio){
+            vacunas_a_entregar_aux[rand() % CENTROS_VACUNACION] += 1;
+            vacunas_asignadas += 1;
+        }   
+        // Ya se sabe como se reparte, y se procede a ello
         printf("Fábrica %d prepara %d vacunas\n", fil_id,aleatorio);
         for( int j = 0; j < CENTROS_VACUNACION; j++){
-
+            for (int i = 0; i < CENTROS_VACUNACION; i++){
+               if (vacunas_a_entregar_aux[j] < 0){
+                   vacunas_a_entregar_aux[j] = 0;
+               }
+            }
             printf("Fábrica %d entrega %d vacunas al centro %d \n", fil_id,vacunas_a_entregar_aux[j] ,j+1);
             fabricas[fil_id-1].centros_entregados[j] += vacunas_a_entregar_aux[j];
             centros_vacunacion[j].vacunas_disponibles += vacunas_a_entregar_aux[j];
         }
-
+        // Actualizo la información de las vacunas fabricadas
         fabricas[fil_id-1].vacunas_a_fabricar -= aleatorio;
         fabricas[fil_id-1].vacunas_entregadas += aleatorio;
-
+        // Doy las señales de que ya hay nuevas vacunas para el mutex_cond
         for( int i = 0; i < CENTROS_VACUNACION; i++){
             pthread_cond_broadcast(&espera[i]); 
-        }  
+        }
+        // Desbloqueo los mutex de todos los centros de fabricación  
         for( int i = 0; i < CENTROS_VACUNACION; i++){
             pthread_mutex_unlock(&mutex[i]); 
         }        
-
     }
+    printf("La fábrica %d ya ha terminado su producción\n", fil_id);
+    //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
+    pthread_exit(0);
 }
 
 
@@ -260,7 +259,6 @@ void configuracion (char * entrada, char * salida){
     }
     // Damos los valores iniciales a cada fábrica
     for (int i = 0; i < FABRICAS; i++){
-        fabricas[i].vacunas_a_entregar = vacunas_a_fabricar/FABRICAS;
         fabricas[i].vacunas_entregadas = 0;
         fabricas[i].vacunas_a_fabricar = vacunas_a_fabricar/FABRICAS;
     }
@@ -268,6 +266,7 @@ void configuracion (char * entrada, char * salida){
     for (int i = 0; i < CENTROS_VACUNACION; i++){
         porcentajes[i] = 0;
     }
+    // Damos valor a la variable usada para el control de la generación de tandas
     habitantes_por_tanda = configuracion_inicial[0]/TANDAS_VACUNACION;
 
 }
@@ -297,7 +296,7 @@ void impresion_estadisticas(){
 
     
     for(int i = 0; i< FABRICAS; i++){
-        printf("La fábrica %d ha fabricado %d vacunas \n",i+1,fabricas[i].vacunas_entregadas);   
+        printf("La fábrica %d ha fabricado %d vacunas \n",i+1,vacunas_a_fabricar/FABRICAS);   
         for(int j = 0; j < CENTROS_VACUNACION; j++){
             printf("La fábrica %d ha entregado al centro %d: %d vacunas \n",i+1,j+1,fabricas[i].centros_entregados[j]);
         }
