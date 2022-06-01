@@ -20,7 +20,7 @@ void * habitante(void *num);
 void * fabrica(void *num);
 void calc_porcentajes();
 
-// Declaro el centro de vacunación y la fábrica como un tipo de dato para un manejo de los recursos más fácil
+// Declaro el centro de vacunación y la fábrica como un tipo de dato para un manejo de los recursos más fácilmente
 typedef struct {
     int vacunas_disponibles;
     int lista_espera;
@@ -29,7 +29,6 @@ typedef struct {
 
 typedef struct {
     int vacunas_a_fabricar;
-
     int vacunas_entregadas;
     int centros_entregados[CENTROS_VACUNACION];
 } t_fabrica;
@@ -43,10 +42,11 @@ pthread_cond_t espera[CENTROS_VACUNACION];
 // Para las fábricas y centros de vacunación:
 centro_vacunacion centros_vacunacion[CENTROS_VACUNACION];
 t_fabrica fabricas[FABRICAS];
+double  porcentajes[CENTROS_VACUNACION];
+int habitantes_vacunados,habitantes_por_tanda;
 
 // Para entrada y salida:
-double  porcentajes[CENTROS_VACUNACION];
-int habitantes_vacunados,habitantes_por_tanda,configuracion_inicial[9], vacunas_a_fabricar;
+int configuracion_inicial[9], vacunas_a_fabricar;
 char* entrada_defecto = "entrada_vacunacion.txt";
 char* salida_defecto = "salida_vacunacion.txt";
 
@@ -96,26 +96,30 @@ int main(int argc, char * argv[]){
             habitantes_id[i] = i+1;
             pthread_create(&th,NULL,habitante,(void*)&habitantes_id[i]);    
         }
+        // Hasta que la tanda anterior no ha sido vacuanda, no puedo mandar a los siguientes habitantes
         while(habitantes_vacunados != habitantes_por_tanda * (j+1)){ 
         }
     }
+    // Hasta que toda la pobación no haya sido vacunada, debo esperar a que finalicen todos los hilos
     while (habitantes_vacunados != configuracion_inicial[0]){
     }
+    // Destruyo los mutex y mutex_cond
     for(int i = 0; i < CENTROS_VACUNACION; i++) {
 		pthread_mutex_destroy(&mutex[i]);
         pthread_cond_destroy(&espera[i]);
     }
-
+    // Imprimo las estadísticas
     printf("\n******** VACUNACIÓN FINALIZADA ********\n\n");
 	impresion_estadisticas();
-    // Ejemplo: fputs (“cadena”, nombreInternoFichero);
-    // Ejemplo: fprintf (fichero, "%s %d", cadena1, num); Escribe como texto a un archivo los datos transformando el formato especificado en texto
 }
 
 void *habitante(void * num){
     // variables usadas por el thread	
 	int fil_id = *(int *)num;
     int aleatorio;
+
+    // INICIO
+
     aleatorio = (rand() % CENTROS_VACUNACION); // El centro de vacunación será entre el 0 - 4
 	// El habitante tarda un tiempo random en reaccionar al mensaje de ser vacunado
     sleep(rand() % (configuracion_inicial[7]) + (1));
@@ -123,10 +127,10 @@ void *habitante(void * num){
     // El habitante elige un centro de vacunación y se pone en la lista de espera de ese centro ( de ahí el mutex usado)
     pthread_mutex_lock(&mutex[aleatorio]);
 
-    // Sección crítica del mutex
+    // SECCIÓN CRÍTICA
     printf("Habitante %d elige centro de vacunacion %d\n", fil_id,aleatorio+1);
     centros_vacunacion[aleatorio].lista_espera += 1;
-
+    // FIN SECCIÓN CRÍTICA
     pthread_mutex_unlock(&mutex[aleatorio]); 
 
     // El habitante tarda un tiempo random en acudir al centro de vacunación
@@ -138,15 +142,16 @@ void *habitante(void * num){
     while(centros_vacunacion[aleatorio].vacunas_disponibles < 1){
         pthread_cond_wait(&espera[aleatorio], &mutex[aleatorio]);
     }    
-
-    // Sección crítica del mutex        
+    // SECCIÓN CRÍTICA       
     printf("Habitante %d vacunado en el centro %d\n", fil_id,aleatorio+1);
     centros_vacunacion[aleatorio].lista_espera -= 1;
     centros_vacunacion[aleatorio].vacunas_disponibles -= 1;
     centros_vacunacion[aleatorio].vacunados += 1;
     habitantes_vacunados += 1;
+    // FIN SECCIÓN CRÍTICA
     pthread_mutex_unlock(&mutex[aleatorio]); 
     
+
     //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
     pthread_exit(0);
 }
@@ -154,12 +159,17 @@ void *habitante(void * num){
 void *fabrica(void * num){
     // variables usadas por el thread	
     int fil_id = *(int *)num;
-    int aux, aleatorio,vacunas_asignadas, vacunas_a_entregar_aux[CENTROS_VACUNACION];
+    int aleatorio,vacunas_asignadas, vacunas_a_entregar_aux[CENTROS_VACUNACION];
+    
+    //INICIO
+
     //Realizo el bucle siempre que queden vacunas por fabricar
     while(fabricas[fil_id-1].vacunas_a_fabricar > 0){
+        // En caso de poder tener fallo con el nº de vacunas, establezco que las vacunas fabricadas en la última tanda son exactamente las que le faltan por fabricar a la fábrica
         if (fabricas[fil_id-1].vacunas_a_fabricar < configuracion_inicial[3]){ 
             aleatorio =  fabricas[fil_id-1].vacunas_a_fabricar;
         }else {
+        // En otro caso, la fabricación será un nº aleatorio entre los datos de configuración dados    
             aleatorio = rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
         }
 
@@ -174,7 +184,7 @@ void *fabrica(void * num){
             pthread_mutex_lock(&mutex[j]); 
         }
 
-        // Sección crítica
+        // SECCIÓN CRÍTICA
         vacunas_asignadas = 0;
         for( int j = 0; j < CENTROS_VACUNACION; j++){
             // Actualizamos la demanda existente en los centros de vacunación
@@ -209,12 +219,14 @@ void *fabrica(void * num){
         for( int i = 0; i < CENTROS_VACUNACION; i++){
             pthread_cond_broadcast(&espera[i]); 
         }
-        // Desbloqueo los mutex de todos los centros de fabricación  
+
+        // FIN SECCIÓN CRÍTICA
         for( int i = 0; i < CENTROS_VACUNACION; i++){
             pthread_mutex_unlock(&mutex[i]); 
         }        
     }
     printf("La fábrica %d ya ha terminado su producción\n", fil_id);
+
     //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
     pthread_exit(0);
 }
@@ -300,18 +312,5 @@ void impresion_estadisticas(){
         for(int j = 0; j < CENTROS_VACUNACION; j++){
             printf("La fábrica %d ha entregado al centro %d: %d vacunas \n",i+1,j+1,fabricas[i].centros_entregados[j]);
         }
-    }
-}
-
-
-void calc_porcentajes (){
-    double aux;
-    double total = 0;
-    for (int i= 0; i< CENTROS_VACUNACION; i++){
-        total += centros_vacunacion[i].lista_espera;
-    }
-    for (int i = 0; i < CENTROS_VACUNACION; i++){
-        aux = ((centros_vacunacion[i].lista_espera)/total);
-        porcentajes[i] = aux;
     }
 }
