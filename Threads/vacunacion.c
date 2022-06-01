@@ -163,6 +163,7 @@ void *fabrica(void * num){
         }else {
             aleatorio = rand() % (configuracion_inicial[3] - configuracion_inicial[2] + 1) + configuracion_inicial[2];
         }
+
         // Tiempo de fabricación de las vacunas
         sleep(rand() % (configuracion_inicial[5] - configuracion_inicial[4] + 1) + configuracion_inicial[4]);
         // Actualizo el stock de mi fábrica
@@ -180,8 +181,8 @@ void *fabrica(void * num){
         if (fabricas[fil_id-1].vacunas_a_fabricar < configuracion_inicial[3]){
             for( int j = 0; j < CENTROS_VACUNACION; j++){
                 // Actualizamos la demanda existente en los centros de vacunación
-                if(centros_vacunacion[j].lista_espera > aleatorio){
-                    vacunas_a_entregar_aux[j] = aleatorio;
+                if(centros_vacunacion[j].lista_espera > (aleatorio- vacunas_asignadas)){
+                    vacunas_a_entregar_aux[j] = (aleatorio - vacunas_asignadas);
                     break;
                 }
                 vacunas_a_entregar_aux[j] = centros_vacunacion[j].lista_espera;
@@ -200,9 +201,7 @@ void *fabrica(void * num){
 
         printf("Fábrica %d prepara %d vacunas\n", fil_id,aleatorio);
         for( int j = 0; j < CENTROS_VACUNACION; j++){
-                if (vacunas_a_entregar_aux[j] < 0){
-                    vacunas_a_entregar_aux[j] = 0;
-                }
+
             printf("Fábrica %d entrega %d vacunas al centro %d \n", fil_id,vacunas_a_entregar_aux[j] ,j+1);
             fabricas[fil_id-1].centros_entregados[j] += vacunas_a_entregar_aux[j];
             centros_vacunacion[j].vacunas_disponibles += vacunas_a_entregar_aux[j];
@@ -218,11 +217,8 @@ void *fabrica(void * num){
             pthread_mutex_unlock(&mutex[i]); 
         }        
 
-    }   
-    printf("Fábrica %d ha fabricado todas sus vacunas\n", fil_id);
-    //Destrucción del hilo, ya que el habitante ya se ha vacunado y salida con 0 al ser correcta
-    pthread_exit(0);        
-};
+    }
+}
 
 
 void configuracion (char * entrada, char * salida){
